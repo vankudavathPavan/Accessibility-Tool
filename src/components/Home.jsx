@@ -4,11 +4,12 @@ const Home = () => {
   const [url, setUrl] = useState("");
   const [content, setContent] = useState("");
   const [isListening, setIsListening] = useState(false);
+  const [language, setLanguage] = useState("en-US"); // Default language is English
 
   const recognition = new (window.SpeechRecognition ||
     window.webkitSpeechRecognition)();
   recognition.interimResults = false; // Get only final results
-  recognition.lang = "en-US"; // Set language
+  recognition.lang = language; // Set language
 
   let inactivityTimer;
 
@@ -22,12 +23,13 @@ const Home = () => {
 
   // Start speech recognition
   const startListening = () => {
-    setIsListening(true);
+    console.log("Starting recognition in language:", language);
     recognition.start();
     resetInactivityTimer(); // Start the inactivity timer
   };
 
   const stopListening = () => {
+    console.log("Stopping recognition");
     setIsListening(false);
     recognition.stop();
     clearTimeout(inactivityTimer); // Clear the inactivity timer
@@ -41,26 +43,62 @@ const Home = () => {
 
     // Restart recognition after a short delay
     setTimeout(() => {
+      console.log("Restarting recognition");
       recognition.start(); // Restart recognition to keep listening
     }, 500); // Small delay before restarting
   };
 
   const handleCommand = (command) => {
-    if (command.includes("scroll down")) {
-      window.scrollBy(0, 100); // Scroll down
-    } else if (command.includes("scroll up")) {
-      window.scrollBy(0, -100); // Scroll up
-    } else if (command.includes("end")) {
-      stopListening(); // Stop listening
-    } 
+    const currentLanguage = recognition.lang;
+
+    // Handle commands in English
+    if (currentLanguage === "en-US") {
+      if (command.includes("scroll down")) {
+        window.scrollBy(0, 100); // Scroll down
+      } else if (command.includes("scroll up")) {
+        window.scrollBy(0, -100); // Scroll up
+      }
+    }
+
+    // Handle commands in Hindi
+    else if (currentLanguage === "hi-IN") {
+      if (command.includes("नीचे स्क्रॉल करें") || command.includes("नीचे")) {
+        window.scrollBy(0, 100); // Scroll down
+      } else if (
+        command.includes("ऊपर स्क्रॉल करें") ||
+        command.includes("ऊपर")
+      ) {
+        window.scrollBy(0, -100); // Scroll up
+      }
+    }
+
+    // Handle commands in Telugu
+    else if (currentLanguage === "te-IN") {
+      if (
+        command.includes("క్రిందకు స్క్రోల్ చేయి") ||
+        command.includes("క్రిందకి")
+      ) {
+        window.scrollBy(0, 100); // Scroll down
+      } else if (
+        command.includes("పైకి స్క్రోల్ చేయి") ||
+        command.includes("పైకి")
+      ) {
+        window.scrollBy(0, -100); // Scroll up
+      }
+    }
   };
 
   // Reset the inactivity timer
   const resetInactivityTimer = () => {
     clearTimeout(inactivityTimer);
     inactivityTimer = setTimeout(() => {
+      console.log("Stopping recognition after 30 seconds of inactivity");
       stopListening(); // Stop listening after 30 seconds of inactivity
     }, 30000);
+  };
+
+  const handleLanguageChange = (e) => {
+    setLanguage(e.target.value); // Change the language
   };
 
   // Fetch content from the Flask backend
@@ -109,10 +147,31 @@ const Home = () => {
     });
   };
 
-  // useEffect to add speaker buttons after content is rendered
+  // Function to add click event listeners to every link containing an image
+  const addClickListener = () => {
+    const links = document.querySelectorAll("#content a"); // Select all anchor tags
+    links.forEach((link) => {
+      // Replace existing click event listener
+      link.onclick = function (event) {
+        event.preventDefault(); // Prevent the default link behavior
+        console.log("clicked");
+      };
+    });
+
+    // Select all images
+    const images = document.querySelectorAll("#content img");
+    images.forEach((img) => {
+      img.onclick = function (event) {
+        console.log("clicked on image"); // Log when the image is clicked
+      };
+    });
+  };
+
+  // useEffect to add click listeners to images after content is rendered
   useEffect(() => {
     if (content) {
-      addSpeakerButtons(); // Add speaker buttons whenever content changes
+      addSpeakerButtons(); // Existing function to add speaker buttons
+      addClickListener(); // Function to replace the click listeners for links
     }
   }, [content]);
 
@@ -141,8 +200,28 @@ const Home = () => {
       </form>
 
       <div className="mt-4">
+        <label htmlFor="language" className="mr-2">
+          Select Language:
+        </label>
+        <select
+          id="language"
+          value={language}
+          onChange={handleLanguageChange}
+          className="p-2 rounded bg-white border"
+        >
+          <option value="en-US">English (US)</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="te-IN">Telugu</option>
+        </select>
+      </div>
+
+      <div className="mt-4">
         <button
-          onClick={startListening}
+          onClick={() => {
+            if (!isListening) startListening();
+            else stopListening();
+            setIsListening(!isListening);
+          }}
           className={`${
             isListening ? "bg-red-500" : "bg-blue-500"
           } hover:bg-blue-700 text-white font-bold py-2 px-4 rounded`}

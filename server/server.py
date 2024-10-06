@@ -3,6 +3,7 @@ from flask_cors import CORS
 import requests
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
+# from models.image2text import process_image
 
 app = Flask(__name__)
 CORS(app)  # This will enable CORS for all routes
@@ -40,6 +41,17 @@ def index():
         html_content, content_type = fetch_and_render_url(url)
         return Response(html_content, content_type=content_type)
     return Response("No URL provided", content_type='text/plain')
+
+# @app.route('/process-image', methods=['POST'])
+# def upload_image():
+#     if 'image' not in request.files:
+#         return Response("No image uploaded", status=400)
+
+#     image_file = request.files['image']
+
+#     description = process_image(image_file)
+
+#     return Response({"description": description}, content_type='application/json')
 
 if __name__ == '__main__':
     app.run(debug=True)
