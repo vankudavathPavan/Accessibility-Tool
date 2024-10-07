@@ -4,7 +4,10 @@ const Home = () => {
   const [url, setUrl] = useState("");
   const [content, setContent] = useState("");
   const [isListening, setIsListening] = useState(false);
-  const [language, setLanguage] = useState("en-US"); // Default language is English
+  const [language, setLanguage] = useState("en-US");
+  const [translations, setTranslations] = useState({}); // State to store translations
+  const [popupContent, setPopupContent] = useState(""); // State to manage popup content
+  const [isPopupVisible, setIsPopupVisible] = useState(false); // State for popup visibility
 
   const recognition = new (window.SpeechRecognition ||
     window.webkitSpeechRecognition)();
@@ -13,7 +16,6 @@ const Home = () => {
 
   let inactivityTimer;
 
-  // Handle URL form submission
   const handleSubmit = (e) => {
     e.preventDefault();
     if (url) {
@@ -21,31 +23,30 @@ const Home = () => {
     }
   };
 
-  // Start speech recognition
   const startListening = () => {
     console.log("Starting recognition in language:", language);
     recognition.start();
-    resetInactivityTimer(); // Start the inactivity timer
+    resetInactivityTimer();
   };
 
   const stopListening = () => {
     console.log("Stopping recognition");
     setIsListening(false);
     recognition.stop();
-    clearTimeout(inactivityTimer); // Clear the inactivity timer
+    clearTimeout(inactivityTimer);
   };
 
   recognition.onresult = (event) => {
     const command = event.results[0][0].transcript.toLowerCase();
-    console.log("Recognized command:", command); // Debugging log
+    console.log("Recognized command:", command);
     handleCommand(command);
-    resetInactivityTimer(); // Reset the inactivity timer on command
+    resetInactivityTimer();
 
     // Restart recognition after a short delay
     setTimeout(() => {
       console.log("Restarting recognition");
       recognition.start(); // Restart recognition to keep listening
-    }, 500); // Small delay before restarting
+    }, 500);
   };
 
   const handleCommand = (command) => {
@@ -88,20 +89,18 @@ const Home = () => {
     }
   };
 
-  // Reset the inactivity timer
   const resetInactivityTimer = () => {
     clearTimeout(inactivityTimer);
     inactivityTimer = setTimeout(() => {
       console.log("Stopping recognition after 30 seconds of inactivity");
-      stopListening(); // Stop listening after 30 seconds of inactivity
+      stopListening();
     }, 30000);
   };
 
   const handleLanguageChange = (e) => {
-    setLanguage(e.target.value); // Change the language
+    setLanguage(e.target.value);
   };
 
-  // Fetch content from the Flask backend
   const fetchContent = async (url) => {
     try {
       const response = await fetch("http://localhost:5000/", {
@@ -118,10 +117,32 @@ const Home = () => {
     }
   };
 
-  // Function to add speaker buttons after content is fetched
+  const translateParagraph = async (text, targetLang, index) => {
+    try {
+      const response = await fetch("http://localhost:5000/translate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text, target_lang: targetLang }),
+      });
+      const translatedText = await response.text();
+      setTranslations((prev) => ({
+        ...prev,
+        [index]: translatedText,
+      }));
+
+      // Show popup after translation
+      setPopupContent(translatedText); // Set the content for the popup
+      setIsPopupVisible(true); // Show the popup
+    } catch (error) {
+      console.error("Error translating text:", error);
+    }
+  };
+
   const addSpeakerButtons = () => {
     const paragraphs = document.querySelectorAll("#content p");
-    paragraphs.forEach((p) => {
+    paragraphs.forEach((p, index) => {
       if (!p.classList.contains("speaker-added")) {
         const speakerButton = document.createElement("button");
         speakerButton.innerHTML = "🔊";
@@ -134,44 +155,61 @@ const Home = () => {
         );
         speakerButton.onclick = function () {
           if ("speechSynthesis" in window) {
-            window.speechSynthesis.cancel(); // Stop any ongoing speech
+            window.speechSynthesis.cancel();
             var msg = new SpeechSynthesisUtterance();
-            msg.text = p.innerText; // Get the text of the paragraph
-            msg.lang = "en-US"; // Set the language
-            window.speechSynthesis.speak(msg); // Speak the text
+            msg.text = p.innerText;
+            msg.lang = "en-US";
+            window.speechSynthesis.speak(msg);
           }
         };
-        p.insertAdjacentElement("afterend", speakerButton); // Add button after each paragraph
-        p.classList.add("speaker-added"); // Mark paragraph as having a speaker button
+        p.insertAdjacentElement("afterend", speakerButton);
+        p.classList.add("speaker-added");
+
+        const translateButton = document.createElement("button");
+        translateButton.innerHTML = "🌐 Translate";
+        translateButton.classList.add(
+          "translate",
+          "ml-2",
+          "cursor-pointer",
+          "text-green-600",
+          "hover:text-green-800"
+        );
+        translateButton.onclick = async function () {
+          const targetLang = prompt("Enter target language code (e.g., 'en', 'hi', 'te'):");
+          if (targetLang) {
+            await translateParagraph(p.innerText, targetLang, index);
+          }
+        };
+        p.insertAdjacentElement("afterend", translateButton);
       }
     });
   };
 
-  // Function to add click event listeners to every link containing an image
+  const closePopup = () => {
+    setIsPopupVisible(false); // Close the popup
+  };
+
   const addClickListener = () => {
-    const links = document.querySelectorAll("#content a"); // Select all anchor tags
+    const links = document.querySelectorAll("#content a");
     links.forEach((link) => {
-      // Replace existing click event listener
       link.onclick = function (event) {
-        event.preventDefault(); // Prevent the default link behavior
+        event.preventDefault();
         console.log("clicked");
       };
     });
 
-    // Select all images
     const images = document.querySelectorAll("#content img");
     images.forEach((img) => {
       img.onclick = function (event) {
-        console.log("clicked on image"); // Log when the image is clicked
+        console.log("clicked on image");
       };
     });
   };
 
-  // useEffect to add click listeners to images after content is rendered
   useEffect(() => {
     if (content) {
-      addSpeakerButtons(); // Existing function to add speaker buttons
-      addClickListener(); // Function to replace the click listeners for links
+      addSpeakerButtons();
+      addClickListener();
     }
   }, [content]);
 
@@ -199,6 +237,7 @@ const Home = () => {
         </div>
       </form>
 
+
       <div className="mt-4">
         <label htmlFor="language" className="mr-2">
           Select Language:
@@ -214,28 +253,42 @@ const Home = () => {
           <option value="te-IN">Telugu</option>
         </select>
       </div>
-
-      <div className="mt-4">
-        <button
-          onClick={() => {
-            if (!isListening) startListening();
-            else stopListening();
-            setIsListening(!isListening);
-          }}
-          className={`${
-            isListening ? "bg-red-500" : "bg-blue-500"
-          } hover:bg-blue-700 text-white font-bold py-2 px-4 rounded`}
-        >
-          {isListening ? "Listening..." : "Start Listening"}
-        </button>
-      </div>
+      <button
+        onClick={() => {
+          setIsListening(!isListening);
+          if (!isListening) {
+            startListening();
+            setIsListening(true);
+          } else {
+            stopListening();
+          }
+        }}
+        className={`mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded`}
+      >
+        {isListening ? "Stop Listening" : "Start Listening"}
+      </button>
 
       <div
         id="content"
-        className="mt-8 bg-white shadow-md p-4 rounded w-full px-4 overflow-auto"
-      >
-        <div dangerouslySetInnerHTML={{ __html: content }}></div>
-      </div>
+        className="mt-8 p-4 bg-white rounded shadow-md w-full px-4 overflow-auto"
+        dangerouslySetInnerHTML={{ __html: content }}
+      ></div>
+
+      {/* Popup for translation */}
+      {isPopupVisible && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded shadow-lg relative">
+            <button
+              className="absolute top-2 right-2 text-red-500"
+              onClick={closePopup}
+            >
+              ✖️
+            </button>
+            <h2 className="text-xl font-semibold">Translation</h2>
+            <p className="mt-4">{popupContent}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

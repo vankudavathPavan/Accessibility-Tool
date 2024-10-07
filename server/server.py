@@ -3,10 +3,13 @@ from flask_cors import CORS
 import requests
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
+from googletrans import Translator
 # from models.image2text import process_image
 
 app = Flask(__name__)
 CORS(app)  # This will enable CORS for all routes
+
+translator = Translator()  # Initialize the Google Translator
 
 # Function to fetch and return the HTML from a given URL
 def fetch_and_render_url(url):
@@ -41,6 +44,19 @@ def index():
         html_content, content_type = fetch_and_render_url(url)
         return Response(html_content, content_type=content_type)
     return Response("No URL provided", content_type='text/plain')
+
+# Endpoint to handle translations
+@app.route('/translate', methods=['POST'])
+def translate_text():
+    text = request.json.get('text')
+    target_lang = request.json.get('target_lang')
+    if text and target_lang:
+        try:
+            translated = translator.translate(text, dest=target_lang)
+            return Response(translated.text, content_type='text/plain')
+        except Exception as e:
+            return Response(f"Translation error: {str(e)}", status=400)
+    return Response("Invalid input", status=400)
 
 # @app.route('/process-image', methods=['POST'])
 # def upload_image():
