@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
 
 const Home = () => {
+  // State variables
   const [url, setUrl] = useState("");
   const [content, setContent] = useState("");
+  const [summary, setSummary] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [language, setLanguage] = useState("en-US"); // Default language is English
 
-  const recognition = new (window.SpeechRecognition ||
-    window.webkitSpeechRecognition)();
+  // Initialize speech recognition
+  const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
   recognition.interimResults = false; // Get only final results
   recognition.lang = language; // Set language
 
@@ -28,6 +30,7 @@ const Home = () => {
     resetInactivityTimer(); // Start the inactivity timer
   };
 
+  // Stop speech recognition
   const stopListening = () => {
     console.log("Stopping recognition");
     setIsListening(false);
@@ -35,6 +38,7 @@ const Home = () => {
     clearTimeout(inactivityTimer); // Clear the inactivity timer
   };
 
+  // Handle recognized speech results
   recognition.onresult = (event) => {
     const command = event.results[0][0].transcript.toLowerCase();
     console.log("Recognized command:", command); // Debugging log
@@ -48,6 +52,7 @@ const Home = () => {
     }, 500); // Small delay before restarting
   };
 
+  // Handle voice commands for scrolling
   const handleCommand = (command) => {
     const currentLanguage = recognition.lang;
 
@@ -64,25 +69,16 @@ const Home = () => {
     else if (currentLanguage === "hi-IN") {
       if (command.includes("नीचे स्क्रॉल करें") || command.includes("नीचे")) {
         window.scrollBy(0, 100); // Scroll down
-      } else if (
-        command.includes("ऊपर स्क्रॉल करें") ||
-        command.includes("ऊपर")
-      ) {
+      } else if (command.includes("ऊपर स्क्रॉल करें") || command.includes("ऊपर")) {
         window.scrollBy(0, -100); // Scroll up
       }
     }
 
     // Handle commands in Telugu
     else if (currentLanguage === "te-IN") {
-      if (
-        command.includes("క్రిందకు స్క్రోల్ చేయి") ||
-        command.includes("క్రిందకి")
-      ) {
+      if (command.includes("క్రిందకు స్క్రోల్ చేయి") || command.includes("క్రిందకి")) {
         window.scrollBy(0, 100); // Scroll down
-      } else if (
-        command.includes("పైకి స్క్రోల్ చేయి") ||
-        command.includes("పైకి")
-      ) {
+      } else if (command.includes("పైకి స్క్రోల్ చేయి") || command.includes("పైకి")) {
         window.scrollBy(0, -100); // Scroll up
       }
     }
@@ -97,6 +93,7 @@ const Home = () => {
     }, 30000);
   };
 
+  // Handle language selection
   const handleLanguageChange = (e) => {
     setLanguage(e.target.value); // Change the language
   };
@@ -111,18 +108,21 @@ const Home = () => {
         },
         body: JSON.stringify({ url }),
       });
-      const html = await response.text();
-      setContent(html);
+      
+      const result = await response.json(); // Expecting JSON response now
+      setContent(result.html); // Set HTML content
+      setSummary(result.summary); // Set the summary content
     } catch (error) {
       console.error("Error fetching content:", error);
     }
   };
 
-  // Function to add speaker buttons after content is fetched
-  const addSpeakerButtons = () => {
-    const paragraphs = document.querySelectorAll("#content p");
-    paragraphs.forEach((p) => {
-      if (!p.classList.contains("speaker-added")) {
+  // Function to add speaker buttons after content is fetched 
+  const addSpeakerButtons = () => { 
+    const elements = document.querySelectorAll("#content p, #content h1, #content h2, #content h3, #content h4, #content h5, #content h6");
+
+    elements.forEach((el) => {
+      if (!el.classList.contains("speaker-added")) {
         const speakerButton = document.createElement("button");
         speakerButton.innerHTML = "🔊";
         speakerButton.classList.add(
@@ -134,15 +134,15 @@ const Home = () => {
         );
         speakerButton.onclick = function () {
           if ("speechSynthesis" in window) {
-            window.speechSynthesis.cancel(); // Stop any ongoing speech
-            var msg = new SpeechSynthesisUtterance();
-            msg.text = p.innerText; // Get the text of the paragraph
-            msg.lang = "en-US"; // Set the language
-            window.speechSynthesis.speak(msg); // Speak the text
+            window.speechSynthesis.cancel(); 
+            const msg = new SpeechSynthesisUtterance();
+            msg.text = el.innerText; 
+            msg.lang = "en-US"; 
+            window.speechSynthesis.speak(msg); 
           }
         };
-        p.insertAdjacentElement("afterend", speakerButton); // Add button after each paragraph
-        p.classList.add("speaker-added"); // Mark paragraph as having a speaker button
+        el.insertAdjacentElement("afterend", speakerButton); 
+        el.classList.add("speaker-added"); 
       }
     });
   };
@@ -170,8 +170,8 @@ const Home = () => {
   // useEffect to add click listeners to images after content is rendered
   useEffect(() => {
     if (content) {
-      addSpeakerButtons(); // Existing function to add speaker buttons
-      addClickListener(); // Function to replace the click listeners for links
+      addSpeakerButtons(); // Add speaker buttons to paragraphs and headings
+      addClickListener(); // Add click listeners for links and images
     }
   }, [content]);
 
@@ -180,7 +180,7 @@ const Home = () => {
       <h1 className="text-3xl font-bold mb-4 text-center">
         Fetch and Speak Webpage Content
       </h1>
-
+  
       <form onSubmit={handleSubmit} className="w-full max-w-lg">
         <div className="flex items-center border-b border-teal-500 py-2">
           <input
@@ -198,7 +198,7 @@ const Home = () => {
           </button>
         </div>
       </form>
-
+  
       <div className="mt-4">
         <label htmlFor="language" className="mr-2">
           Select Language:
@@ -214,7 +214,7 @@ const Home = () => {
           <option value="te-IN">Telugu</option>
         </select>
       </div>
-
+  
       <div className="mt-4">
         <button
           onClick={() => {
@@ -229,12 +229,17 @@ const Home = () => {
           {isListening ? "Listening..." : "Start Listening"}
         </button>
       </div>
-
+  
       <div
         id="content"
         className="mt-8 bg-white shadow-md p-4 rounded w-full px-4 overflow-auto"
       >
         <div dangerouslySetInnerHTML={{ __html: content }}></div>
+      </div>
+  
+      <div id="summary" className="mt-4 bg-white shadow-md p-4 rounded w-full">
+        <h2 className="text-xl font-bold">Summary</h2>
+        <p>{summary}</p>
       </div>
     </div>
   );

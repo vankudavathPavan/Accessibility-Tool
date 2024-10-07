@@ -3,10 +3,14 @@ from flask_cors import CORS
 import requests
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
-# from models.image2text import process_image
+from transformers import pipeline  # Import the summarization pipeline
 
+# Initialize the Flask app
 app = Flask(__name__)
-CORS(app)  # This will enable CORS for all routes
+CORS(app)  # Enable CORS for all routes
+
+# Initialize the summarization pipeline
+summarizer = pipeline("summarization")
 
 # Function to fetch and return the HTML from a given URL
 def fetch_and_render_url(url):
@@ -28,29 +32,41 @@ def fetch_and_render_url(url):
         for img in soup.find_all('img', src=True):
             img['src'] = urljoin(url, img['src'])
 
-        # Return the modified HTML content
-        return str(soup), response.headers.get('Content-Type', 'text/html')
+        # Extract text content from paragraphs and headers
+        # text_content = ' '.join([p.get_text() for p in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])])
+        text_content = """
+            In physics, gravity is a fundamental interaction primarily observed as mutual attraction between all things that have mass. 
+            Gravity is, by far, the weakest of the four fundamental interactions, approximately 1038 times weaker than the strong interaction, 1036 times weaker than the electromagnetic force and 1029 times weaker than the weak interaction. 
+        """
+
+        # Summarize the text content
+        summary = summarizer(text_content, max_length=100, min_length=13, do_sample=False)
+
+        # Return the modified HTML content and the summary
+        print("Returning data")
+        return str(soup), summary[0]['summary_text'], response.headers.get('Content-Type', 'text/html')
 
     except requests.exceptions.RequestException as e:
-        return f"Error fetching the URL: {str(e)}", 'text/html'
+        return f"Error fetching the URL: {str(e)}", '', 'text/html'
 
 @app.route('/', methods=['POST'])
 def index():
-    url = request.json.get('url')  # Assuming we're sending JSON from React
+    # Get the URL from the JSON request
+    url = request.json.get('url')  
     if url:
-        html_content, content_type = fetch_and_render_url(url)
-        return Response(html_content, content_type=content_type)
+        html_content, summary, content_type = fetch_and_render_url(url)
+        # Return the HTML content and the summary as JSON
+        return Response({"html": html_content, "summary": summary}, content_type='application/json')
     return Response("No URL provided", content_type='text/plain')
 
+# Optional: Uncomment this section if you want to implement image processing
 # @app.route('/process-image', methods=['POST'])
 # def upload_image():
 #     if 'image' not in request.files:
 #         return Response("No image uploaded", status=400)
 
 #     image_file = request.files['image']
-
 #     description = process_image(image_file)
-
 #     return Response({"description": description}, content_type='application/json')
 
 if __name__ == '__main__':
