@@ -4,6 +4,8 @@ import requests
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 from transformers import pipeline  # Import the summarization pipeline
+from googletrans import Translator
+# from models.image2text import process_image
 
 # Initialize the Flask app
 app = Flask(__name__)
@@ -11,6 +13,8 @@ CORS(app)  # Enable CORS for all routes
 
 # Initialize the summarization pipeline
 summarizer = pipeline("summarization")
+
+translator = Translator()  # Initialize the Google Translator
 
 # Function to fetch and return the HTML from a given URL
 def fetch_and_render_url(url):
@@ -59,7 +63,21 @@ def index():
         return Response({"html": html_content, "summary": summary}, content_type='application/json')
     return Response("No URL provided", content_type='text/plain')
 
+
 # Optional: Uncomment this section if you want to implement image processing
+# Endpoint to handle translations
+@app.route('/translate', methods=['POST'])
+def translate_text():
+    text = request.json.get('text')
+    target_lang = request.json.get('target_lang')
+    if text and target_lang:
+        try:
+            translated = translator.translate(text, dest=target_lang)
+            return Response(translated.text, content_type='text/plain')
+        except Exception as e:
+            return Response(f"Translation error: {str(e)}", status=400)
+    return Response("Invalid input", status=400)
+
 # @app.route('/process-image', methods=['POST'])
 # def upload_image():
 #     if 'image' not in request.files:
