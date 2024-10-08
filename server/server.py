@@ -1,73 +1,113 @@
-from flask import Flask, request, Response
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 import requests
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
-from transformers import pipeline  # Import the summarization pipeline
+from models.image2text import generate_description
+from googletrans import Translator
+from transformers import pipeline
 
-# Initialize the Flask app
-app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+app = Flask(_name_)
 
-# Initialize the summarization pipeline
-summarizer = pipeline("summarization")
+CORS(app, methods=['GET', 'POST', 'OPTIONS'], allow_headers=['Content-Type'], resources={r"/*": {"origins": "http://localhost:3000"}})
+
+translator = Translator()  # Initialize the Google Translator
+
+# Initialize the summarizer using the BART model
+summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 
 # Function to fetch and return the HTML from a given URL
 def fetch_and_render_url(url):
     try:
         # Fetch the content from the URL
         response = requests.get(url)
-        response.raise_for_status()  # Raise an error for bad responses
-
+        response.raise_for_status()  # Raise an error for bad response
         # Parse the HTML with BeautifulSoup
         soup = BeautifulSoup(response.content, 'html.parser')
 
-        # Update the links (CSS, JS, IMG) to use absolute paths
+        # Modify relative to absolute paths
         for link in soup.find_all('link', href=True):
             link['href'] = urljoin(url, link['href'])
 
-        for script in soup.find_all('script', src=True):
-            script['src'] = urljoin(url, script['src'])
-
         for img in soup.find_all('img', src=True):
-            img['src'] = urljoin(url, img['src'])
+            if img['src'].startswith('/static'):
+                img['src'] = urljoin(url, img['src'])
 
-        # Extract text content from paragraphs and headers
-        # text_content = ' '.join([p.get_text() for p in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])])
-        text_content = """
-            In physics, gravity is a fundamental interaction primarily observed as mutual attraction between all things that have mass. 
-            Gravity is, by far, the weakest of the four fundamental interactions, approximately 1038 times weaker than the strong interaction, 1036 times weaker than the electromagnetic force and 1029 times weaker than the weak interaction. 
-        """
+        for a in soup.find_all('a', href=True):
+            a['onclick'] = "event.preventDefault();"
+            a['href'] = urljoin(url, a['href'])
 
-        # Summarize the text content
-        summary = summarizer(text_content, max_length=100, min_length=13, do_sample=False)
-
-        # Return the modified HTML content and the summary
-        print("Returning data")
-        return str(soup), summary[0]['summary_text'], response.headers.get('Content-Type', 'text/html')
+        # Return the modified HTML content
+        return str(soup), response.headers.get('Content-Type', 'text/html')
 
     except requests.exceptions.RequestException as e:
-        return f"Error fetching the URL: {str(e)}", '', 'text/html'
+        return f"Error fetching the URL: {str(e)}", 'text/html'
 
 @app.route('/', methods=['POST'])
 def index():
-    # Get the URL from the JSON request
-    url = request.json.get('url')  
+    url = request.json.get('url')
     if url:
-        html_content, summary, content_type = fetch_and_render_url(url)
-        # Return the HTML content and the summary as JSON
-        return Response({"html": html_content, "summary": summary}, content_type='application/json')
+        html_content, content_type = fetch_and_render_url(url)
+        return Response(html_content, content_type=content_type)
     return Response("No URL provided", content_type='text/plain')
 
-# Optional: Uncomment this section if you want to implement image processing
-# @app.route('/process-image', methods=['POST'])
-# def upload_image():
-#     if 'image' not in request.files:
-#         return Response("No image uploaded", status=400)
+@app.route('/process-image', methods=['POST'])
+def process_image():
+    try:
+        data = request.get_json()
 
-#     image_file = request.files['image']
-#     description = process_image(image_file)
-#     return Response({"description": description}, content_type='application/json')
+        if 'image' not in data:
+            return jsonify({"error": "No image URL provided."}), 400
 
-if __name__ == '__main__':
+        image_url = data['image']
+
+        # Fetch the image from the URL
+        response = requests.get(image_url)
+        response.raise_for_status()
+
+        description = generate_description(response)
+
+        return jsonify({"description": description})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Endpoint to handle translations
+@app.route('/translate', methods=['POST'])
+def translate_text():
+    text = request.json.get('text')
+    target_lang = request.json.get('target_lang')
+    if text and target_lang:
+        try:
+            translated = translator.translate(text, dest=target_lang)
+            return Response(translated.text, content_type='text/plain')
+        except Exception as e:
+            return Response(f"Translation error: {str(e)}", status=400)
+    return Response("Invalid input", status=400)
+
+# Endpoint to summarize text
+@app.route('/summarize', methods=['POST'])
+def summarize_text():
+    try:
+        data = request.get_json()
+        if 'text' not in data:
+            return jsonify({"error": "No text provided."}), 400
+
+        text = data['text']
+
+        # Function to split large text into smaller chunks if needed
+        def chunk_text(text, chunk_size=400):
+            return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+        # Summarize each chunk and combine the summaries
+        text_chunks = chunk_text(text)
+        summaries = [summarizer(chunk, max_length=50, min_length=20, do_sample=False)[0]['summary_text'] for chunk in text_chunks]
+        final_summary = ' '.join(summaries)
+
+        return  Response(final_summary, content_type='text/plain')
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if _name_ == '_main_':
     app.run(debug=True)
